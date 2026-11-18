@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Hand-Drawn Mess Inventory &amp; Price Tracker — The Daily Register">
+  <title>Mess Inventory — The Daily Register</title>
+
+  <!-- Google Fonts: Caveat (handwritten), Patrick Hand (neat handwritten), Nunito (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Patrick+Hand&family=Nunito:wght@400;500;600&display=swap"
+    rel="stylesheet">
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="icon" type="image/jpeg" href="favicon.jpg">
+  <link rel="shortcut icon" href="favicon.ico">
+  <link rel="apple-touch-icon" href="favicon.png">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════
+       NAVIGATION
+  ════════════════════════════════════════════════════════ -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <div class="navbar-brand">📋 Mess Register</div>
+      <div class="navbar-tabs" id="navLinks">
+        <a href="#" class="nav-tab nav-link active" data-page="dashboard">Home</a>
+        <a href="#" class="nav-tab nav-link" data-page="inventory">Inventory</a>
+        <a href="#" class="nav-tab nav-link" data-page="add-item">Add Item</a>
+        <a href="#" class="nav-tab nav-link" data-page="price-comparison">Price Tracker</a>
+        <a href="#" class="nav-tab nav-link" data-page="history">History</a>
+      </div>
+      <div class="nav-right" style="display:flex; align-items:center; margin-left:auto; gap:10px;">
+        <button class="btn btn-sm btn-ghost" id="openConnBtn" style="font-family:var(--font-sub); font-size:0.85rem;"
+          title="Google Sheets Setup">
+          <span id="connIndicatorDot"
+            style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#D4A843; margin-right:4px;"></span>
+          <span id="connStatusText">Sheets Setup</span>
+        </button>
+        <button class="nav-hamburger" id="mobileNavToggle" aria-label="Toggle navigation">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════
+       GLOBAL OVERLAYS
+  ════════════════════════════════════════════════════════ -->
+
+  <!-- Loading overlay — JS toggles class 'hidden' (removed = visible) -->
+  <div id="loadingOverlay" class="loading-overlay hidden" role="status" aria-live="polite">
+    <div class="spinner"></div>
+    <div class="loading-text">Loading…</div>
+  </div>
+
+  <!-- Toast container (bottom-right sticky notes) -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       MODAL: GOOGLE SHEETS SETUP
+  ════════════════════════════════════════════════════════ -->
+  <div id="connModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="connModalTitle">
+    <div class="modal-box" style="max-width:540px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="connModalTitle">Google Sheets Database Setup</h3>
+      </div>
+      <p style="font-family:var(--font-sub); font-size:1rem; margin-bottom:14px; color:var(--color-text);">
+        Connect this notebook register to your Google Spreadsheet via Google Apps Script Web App.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label" for="cfgScriptUrl">Apps Script Web App URL</label>
+        <input type="url" id="cfgScriptUrl" class="form-input"
+          placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+        <span style="font-size:0.8rem; font-family:var(--font-body); opacity:0.7; margin-top:4px;">
+          Deploy <code>Code.gs</code> as a Web App (Access: "Anyone"), copy the URL, and paste it here.
+        </span>
+      </div>
+
+      <div id="connStatusBox"
+        style="padding:10px 14px; border-radius:3px; margin:14px 0; font-family:var(--font-sub); font-size:0.95rem; border:1px solid var(--color-border); background:var(--color-nav-bg);">
+        Status: <strong id="connStatusDesc">Using Sample / Demo Data</strong>
+      </div>
+
+      <div
+        style="font-family:var(--font-body); font-size:0.85rem; line-height:1.5; opacity:0.85; margin-bottom:16px; background:#FAF7F0; border:1px dashed var(--color-border); padding:10px 12px; border-radius:3px;">
+        <strong>Quick 3-step setup:</strong><br>
+        1. In Google Sheets &gt; Extensions &gt; Apps Script.<br>
+        2. Paste the contents of <code>Code.gs</code>, run <code>initSheets()</code> once.<br>
+        3. Click Deploy &gt; New deployment &gt; Web app (Anyone) &gt; paste URL above.
+      </div>
+
+      <div class="modal-footer"
+        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <button class="btn btn-ghost btn-sm" id="resetDemoBtn">Use Sample Data</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" id="saveConnBtn">Save &amp; Connect</button>
+          <button class="btn btn-ghost" id="cancelConnBtn">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       MODAL: CONFIRM DELETE
+  ════════════════════════════════════════════════════════ -->
+  <div id="confirmModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal-box">
+      <h3 class="modal-title" id="confirmTitle">Are you sure?</h3>
+      <p id="confirmMessage" style="margin:12px 0 20px; font-family:var(--font-sub);">This action cannot be undone.</p>
+      <div class="modal-footer">
+        <button class="btn btn-danger" id="confirmOkBtn">Yes, Delete</button>
+        <button class="btn btn-ghost" id="confirmCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       MODAL: EDIT ITEM
+  ════════════════════════════════════════════════════════ -->
+  <div id="editModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" id="editModalTitle">Edit Item</h3>
+      </div>
+      <input type="hidden" id="editItemId">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="editItemName">Item Name *</label>
+          <input type="text" id="editItemName" class="form-input" required placeholder="e.g. Basmati Rice">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="editCategory">Category *</label>
+          <select id="editCategory" class="form-input" required>
+            <option value="">Select category…</option>
+            <option>Vegetables</option>
+            <option>Fruits</option>
+            <option>Rice &amp; Grains</option>
+            <option>Pulses &amp; Dal</option>
+            <option>Dairy Products</option>
+            <option>Meat &amp; Fish</option>
+            <option>Cooking Essentials</option>
+            <option>Cleaning Supplies</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="editQuantity">Quantity *</label>
+          <input type="number" id="editQuantity" class="form-input" required min="0" step="0.01" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="editUnit">Unit *</label>
+          <select id="editUnit" class="form-input" required>
+            <option value="">Select unit…</option>
+            <option>kg</option>
+            <option>g</option>
+            <option>litre</option>
+            <option>ml</option>
+            <option>packet</option>
+            <option>piece</option>
+            <option>Sack</option>
+            <option>box</option>
+            <option>dozen</option>
+            <option>other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="editPurchasePrice">Purchase Price (₹) *</label>
+          <input type="number" id="editPurchasePrice" class="form-input" required min="0" step="0.01"
+            placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="editMinStock">Min Stock Level *</label>
+          <input type="number" id="editMinStock" class="form-input" required min="0" step="0.01" placeholder="e.g. 5">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="editSupplier">Supplier</label>
+          <input type="text" id="editSupplier" class="form-input" placeholder="Supplier name">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="editNotes">Notes</label>
+        <textarea id="editNotes" class="form-input form-textarea" rows="2"
+          placeholder="Any additional notes…"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="saveEditBtn">Save Changes</button>
+        <button class="btn btn-ghost" id="cancelEditBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       MODAL: UPDATE QUANTITY
+  ════════════════════════════════════════════════════════ -->
+  <div id="updateQtyModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:420px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Update Quantity</h3>
+      </div>
+      <p style="font-family:var(--font-sub); margin-bottom:16px; opacity:0.75;" id="uqItemNameDisplay">—</p>
+      <input type="hidden" id="uqItemId">
+      <input type="hidden" id="uqItemName">
+      <div class="form-group">
+        <label class="form-label" for="uqNewQuantity">New Quantity *</label>
+        <input type="number" id="uqNewQuantity" class="form-input" required min="0" step="0.01" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="uqType">Transaction Type *</label>
+        <select id="uqType" class="form-input" required>
+          <option value="Stock Added">Stock Added</option>
+          <option value="Stock Removed">Stock Removed</option>
+          <option value="Stock Correction">Stock Correction</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="uqNotes">Notes</label>
+        <textarea id="uqNotes" class="form-input form-textarea" rows="2" placeholder="Reason for update…"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="saveUqBtn">Update Quantity</button>
+        <button class="btn btn-ghost" id="cancelUqBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       MODAL: ADD PRICE ENTRY
+  ════════════════════════════════════════════════════════ -->
+  <div id="addPriceModal" class="modal-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="addPriceModalTitle">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" id="addPriceModalTitle">Add Price Entry</h3>
+      </div>
+      <input type="hidden" id="addPriceItemId">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="addPriceItemName">Item</label>
+          <input type="text" id="addPriceItemName" class="form-input" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="addPriceValue">Price (₹) *</label>
+          <input type="number" id="addPriceValue" class="form-input" required min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="addPriceUnit">Price Unit</label>
+          <select id="addPriceUnit" class="form-input">
+            <option value="">per unit</option>
+            <option>per kg</option>
+            <option>per g</option>
+            <option>per litre</option>
+            <option>per ml</option>
+            <option>per packet</option>
+            <option>per piece</option>
+            <option>per bag</option>
+            <option>per box</option>
+            <option>per dozen</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="addPriceSupplier">Supplier</label>
+          <input type="text" id="addPriceSupplier" class="form-input" placeholder="Supplier name">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="addPriceDate">Date &amp; Time *</label>
+          <input type="datetime-local" id="addPriceDate" class="form-input" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="addPriceNotes">Notes</label>
+        <textarea id="addPriceNotes" class="form-input form-textarea" rows="2"
+          placeholder="Market price, special rate, etc."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="savePriceBtn">Save Price</button>
+        <button class="btn btn-ghost" id="cancelPriceBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE: DASHBOARD
+  ════════════════════════════════════════════════════════ -->
+  <main id="page-dashboard" class="page page-section active">
+    <div class="page-header">
+      <h1 class="page-title">Today's Overview</h1>
+      <p class="page-subtitle" id="currentDate"></p>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="stats-grid">
+      <div class="stat-card stat-green">
+        <span class="stat-card-value" id="stat-total">—</span>
+        <span class="stat-card-label">Total Items</span>
+      </div>
+      <div class="stat-card stat-blue">
+        <span class="stat-card-value" id="stat-instock">—</span>
+        <span class="stat-card-label">In Stock</span>
+      </div>
+      <div class="stat-card stat-yellow">
+        <span class="stat-card-value" id="stat-low">—</span>
+        <span class="stat-card-label">Running Low</span>
+      </div>
+      <div class="stat-card stat-red">
+        <span class="stat-card-value" id="stat-out">—</span>
+        <span class="stat-card-label">Out of Stock</span>
+      </div>
+    </div>
+
+    <!-- Recent updates -->
+    <div class="card accent-brown">
+      <h2 class="section-heading brown">Recent Updates</h2>
+      <div id="recentUpdates"><!-- populated by JS --></div>
+    </div>
+
+    <!-- Quick inventory overview -->
+    <div class="card accent-green">
+      <h2 class="section-heading">Inventory Snapshot</h2>
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <input type="text" id="dashSearchInput" class="search-input" placeholder="Search items…">
+        </div>
+        <select id="dashCategoryFilter">
+          <option value="">All Categories</option>
+          <!-- populated by JS -->
+        </select>
+      </div>
+      <div class="table-wrapper">
+        <table id="dashInventoryTable">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Category</th>
+              <th>Quantity</th>
+              <th>Price (₹)</th>
+              <th>Status</th>
+              <th>Last Updated</th>
+            </tr>
+          </thead>
+          <tbody id="dashTableBody"><!-- rows populated by JS --></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE: INVENTORY (full management view)
+  ════════════════════════════════════════════════════════ -->
+  <main id="page-inventory" class="page page-section hidden">
+    <div class="page-header">
+      <h1 class="page-title">Inventory Register</h1>
+      <button class="btn btn-primary" onclick="navigateTo('add-item')">+ Add New Item</button>
+    </div>
+
+    <div class="card accent-blue">
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <input type="text" id="invSearchInput" class="search-input" placeholder="Search items…">
+        </div>
+        <select id="invCategoryFilter">
+          <option value="">All Categories</option>
+          <!-- populated by JS -->
+        </select>
+        <select id="invStatusFilter">
+          <option value="">All Status</option>
+          <option value="In Stock">In Stock</option>
+          <option value="Low Stock">Low Stock</option>
+          <option value="Out of Stock">Out of Stock</option>
+        </select>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="inventoryTable">
+          <thead>
+            <tr>
+              <th>Item Name</th>
+              <th>Category</th>
+              <th>Qty</th>
+              <th>Price (₹)</th>
+              <th>Min Stock</th>
+              <th>Supplier</th>
+              <th>Status</th>
+              <th>Last Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inventoryTableBody"><!-- rows populated by JS --></tbody>
+        </table>
+      </div>
+
+      <div id="inventoryEmpty" class="empty-state hidden">
+        <div class="empty-state-text">No items yet.</div>
+        <div class="empty-state-sub">Click "+ Add New Item" to get started.</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE: ADD ITEM
+  ════════════════════════════════════════════════════════ -->
+  <main id="page-add-item" class="page page-section hidden">
+    <div class="page-header">
+      <h1 class="page-title">Add to Register</h1>
+    </div>
+
+    <div class="card accent-green" style="max-width:700px; margin:0 auto;">
+      <h2 class="section-heading" style="margin-bottom:24px;">New Item Entry</h2>
+      <form id="addItemForm" novalidate>
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label class="form-label" for="addItemName">Item Name *</label>
+            <input type="text" id="addItemName" class="form-input" required placeholder="e.g. Basmati Rice">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="addCategory">Category *</label>
+            <select id="addCategory" class="form-input" required>
+              <option value="">Select category…</option>
+              <option>Vegetables</option>
+              <option>Fruits</option>
+              <option>Rice &amp; Grains</option>
+              <option>Pulses &amp; Dal</option>
+              <option>Dairy Products</option>
+              <option>Meat &amp; Fish</option>
+              <option>Cooking Essentials</option>
+              <option>Cleaning Supplies</option>
+              <option>Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="addQuantity">Quantity *</label>
+            <input type="number" id="addQuantity" class="form-input" required min="0" step="0.01" placeholder="0">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="addUnit">Unit *</label>
+            <select id="addUnit" class="form-input" required>
+              <option value="">Select unit…</option>
+              <option>kg</option>
+              <option>g</option>
+              <option>litre</option>
+              <option>ml</option>
+              <option>packet</option>
+              <option>piece</option>
+              <option>bag</option>
+              <option>box</option>
+              <option>dozen</option>
+              <option>other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="addPurchasePrice">Purchase Price (₹) *</label>
+            <input type="number" id="addPurchasePrice" class="form-input" required min="0" step="0.01"
+              placeholder="0.00">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="addMinStock">Minimum Stock Level *</label>
+            <input type="number" id="addMinStock" class="form-input" required min="0" step="0.01" placeholder="e.g. 5">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="addSupplier">Supplier <span class="label-optional">(optional)</span></label>
+            <input type="text" id="addSupplier" class="form-input" placeholder="Supplier name">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="addEntryDate">Entry Date &amp; Time</label>
+            <input type="datetime-local" id="addEntryDate" class="form-input">
+          </div>
+
+        </div><!-- /form-grid -->
+
+        <div class="form-group">
+          <label class="form-label" for="addNotes">Notes <span class="label-optional">(optional)</span></label>
+          <textarea id="addNotes" class="form-input form-textarea" rows="3"
+            placeholder="Any additional notes…"></textarea>
+        </div>
+
+        <div class="btn-row" style="margin-top:8px;">
+          <button type="submit" class="btn btn-primary" style="font-size:1.1rem; padding:10px 28px;">Add to
+            Register</button>
+          <button type="reset" class="btn btn-ghost">Clear Form</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE: PRICE COMPARISON / TRACKER
+  ════════════════════════════════════════════════════════ -->
+  <main id="page-price-comparison" class="page page-section hidden">
+    <div class="page-header">
+      <h1 class="page-title">Price Tracker</h1>
+    </div>
+
+    <!-- Item selector -->
+    <div class="card accent-blue">
+      <div class="filter-bar" style="margin-bottom:0;">
+        <select id="priceItemSelect" style="min-width:260px; flex:1;">
+          <option value="">— Select an item to track —</option>
+          <!-- populated by JS -->
+        </select>
+        <button class="btn btn-primary btn-sm" id="addPriceEntryBtn">+ Add Price Entry</button>
+      </div>
+    </div>
+
+    <!-- Price stats + chart (shown after item selected) -->
+    <div id="priceStatsSection" class="hidden">
+
+      <div class="stats-grid">
+        <div class="stat-card stat-green">
+          <span class="stat-card-value" id="statCurrentPrice">—</span>
+          <span class="stat-card-label">Current Price</span>
+        </div>
+        <div class="stat-card stat-blue">
+          <span class="stat-card-value" id="statLowestPrice">—</span>
+          <span class="stat-card-label">Lowest Price</span>
+        </div>
+        <div class="stat-card stat-yellow">
+          <span class="stat-card-value" id="statHighestPrice">—</span>
+          <span class="stat-card-label">Highest Price</span>
+        </div>
+        <div class="stat-card stat-red">
+          <span class="stat-card-value" id="statPriceChange">—</span>
+          <span class="stat-card-label">Change vs First Entry</span>
+        </div>
+      </div>
+
+      <!-- Time-range filter buttons -->
+      <div class="chart-filter-btns" id="chartFilters" style="margin-bottom:16px;">
+        <button class="chart-filter-btn active" data-days="7">7 Days</button>
+        <button class="chart-filter-btn" data-days="30">30 Days</button>
+        <button class="chart-filter-btn" data-days="90">3 Months</button>
+        <button class="chart-filter-btn" data-days="180">6 Months</button>
+        <button class="chart-filter-btn" data-days="365">1 Year</button>
+        <button class="chart-filter-btn" data-days="0">All Time</button>
+      </div>
+
+      <!-- Chart -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h2 class="section-heading blue" id="chartTitle" style="margin-bottom:0;">Price History</h2>
+        </div>
+        <div class="chart-canvas-wrap">
+          <canvas id="priceChart" style="height:260px;"></canvas>
+        </div>
+      </div>
+
+      <!-- Full price history table -->
+      <div class="card accent-brown">
+        <h2 class="section-heading brown">All Price Entries</h2>
+        <div class="table-wrapper">
+          <table id="priceHistoryTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Price (₹)</th>
+                <th>Price Unit</th>
+                <th>Supplier</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="priceHistoryBody"><!-- populated by JS --></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /priceStatsSection -->
+
+    <div id="priceEmptyState" class="empty-state">
+      <div class="empty-state-text">Select an item above</div>
+      <div class="empty-state-sub">Choose an item from the dropdown to view its price history and chart.</div>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE: HISTORY / TRANSACTION LOG
+  ════════════════════════════════════════════════════════ -->
+  <main id="page-history" class="page page-section hidden">
+    <div class="page-header">
+      <h1 class="page-title">Transaction Log</h1>
+    </div>
+
+    <div class="card accent-brown">
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <input type="text" id="histSearchInput" class="search-input" placeholder="Search…">
+        </div>
+        <select id="histTypeFilter">
+          <option value="">All Types</option>
+          <option>Stock Added</option>
+          <option>Stock Removed</option>
+          <option>Stock Correction</option>
+          <option>Price Update</option>
+          <option>Item Created</option>
+          <option>Item Edited</option>
+          <option>Item Deleted</option>
+        </select>
+        <select id="histCategoryFilter">
+          <option value="">All Categories</option>
+        </select>
+        <input type="date" id="histStartDate" class="form-input" style="width:auto;" aria-label="From date">
+        <input type="date" id="histEndDate" class="form-input" style="width:auto;" aria-label="To date">
+        <button class="btn btn-secondary btn-sm" id="histFilterBtn">Filter</button>
+        <button class="btn btn-ghost btn-sm" id="histClearBtn">Clear</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="historyTable">
+          <thead>
+            <tr>
+              <th>Date &amp; Time</th>
+              <th>Item</th>
+              <th>Category</th>
+              <th>Type</th>
+              <th>Qty Changed</th>
+              <th>New Qty</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody"><!-- populated by JS --></tbody>
+        </table>
+      </div>
+
+      <div id="historyEmpty" class="empty-state hidden">
+        <div class="empty-state-text">No transactions yet.</div>
+        <div class="empty-state-sub">Transactions appear here when you add or update inventory items.</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SCRIPTS
+  ════════════════════════════════════════════════════════ -->
+  <script src="api.js"></script>
+  <script src="app.js"></script>
+
+</body>
+
+</html>
